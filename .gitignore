@@ -1,0 +1,30 @@
+# 本地权重与缓存（体积大，不入库）
+models/
+.hf_cache/
+
+# 密钥
+.env
+
+# 原始语料（单文件超过 GitHub 100MB 上限）
+raw_docs_*.jsonl
+
+# 流水线中间产物与训练输出
+train/wis/data/pipeline_smoke/
+train/wis/data/pipeline_real_smoke/
+train/wis/data/pipeline_real_v2/
+train/wis/data/pipeline_real_v3/
+train/wis/data/real/
+train/wis/data/real_v1/
+train/wis/data/real_v2/
+train/wis/data/candidates.jsonl
+train/wis/data/pairs.jsonl
+train/wis/data/problems.jsonl
+train/wis/outputs/
+
+# 工具产物
+.trae-html-share-packages/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

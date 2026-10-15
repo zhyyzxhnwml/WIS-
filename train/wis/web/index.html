@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIS 本地客户端</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --panel: #ffffff;
+    --border: #d9e0ea;
+    --ink: #1f2a37;
+    --muted: #67748a;
+    --blue: #1d4e89;
+    --blue-soft: #e8eff8;
+    --ok: #1a7f4b;
+    --err: #b42318;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #173d6b; color: #fff; }
+  button.danger { border-color: #e4b4af; color: var(--err); }
+  button.danger:hover:not(:disabled) { border-color: var(--err); background: #fdf2f1; color: var(--err); }
+  select, input[type="text"], input[type="number"], textarea {
+    font-family: inherit; font-size: 14px; color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 6px 9px; background: #fff; width: 100%;
+  }
+  textarea { resize: vertical; }
+  select:focus, input:focus, textarea:focus { outline: 2px solid var(--blue-soft); border-color: var(--blue); }
+
+  /* 顶部状态条 */
+  #topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    padding: 10px 18px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  #topbar .brand { font-size: 16px; font-weight: 600; color: var(--blue); }
+  #topbar .meta { color: var(--muted); font-size: 13px; }
+  #topbar .meta b { color: var(--ink); font-weight: 600; }
+  #topbar .spacer { flex: 1; }
+  .stage-box { display: flex; align-items: center; gap: 6px; }
+  .stage-box select { width: auto; padding: 4px 8px; }
+  .status { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #b7c1d0; }
+  .dot.ready { background: var(--ok); }
+  .dot.busy { background: #d99a1e; }
+  .dot.err { background: var(--err); }
+  .w-tag { font-size: 12px; color: var(--muted); }
+
+  /* 布局 */
+  #layout { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+  #left { flex: 0 0 420px; }
+  #right { flex: 1 1 auto; min-width: 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; margin-bottom: 16px;
+  }
+  .card h2 {
+    margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--blue);
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  label.field { display: block; margin-bottom: 10px; }
+  label.field > span.lb { display: block; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
+  label.field .req { color: var(--err); }
+  details.opt > summary {
+    cursor: pointer; color: var(--blue); font-size: 13px; margin-bottom: 10px;
+  }
+  .params .prow { margin-bottom: 12px; }
+  .params .phead { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+  .params .phead .val { color: var(--blue); font-weight: 600; }
+  .params .phead .note { color: var(--muted); font-size: 12px; }
+  input[type="range"] { width: 100%; accent-color: var(--blue); }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+  /* 历史 */
+  #history { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow: auto; }
+  #history li {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 7px 9px; margin-bottom: 7px; cursor: pointer; font-size: 13px;
+  }
+  #history li:hover { border-color: var(--blue); background: var(--blue-soft); }
+  #history .hq { color: var(--ink); }
+  #history .ht { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .empty { color: var(--muted); font-size: 13px; }
+
+  /* 输出 */
+  #raw {
+    white-space: pre-wrap; word-break: break-word; margin: 0;
+    background: #fbfcfe; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; min-height: 180px; max-height: 420px; overflow: auto;
+    font-family: "Consolas", "Courier New", monospace; font-size: 13px;
+  }
+  .kv { margin-bottom: 8px; }
+  .kv .k { color: var(--muted); font-size: 12px; }
+  .kv .v { white-space: pre-wrap; word-break: break-word; }
+  table.map { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 13px; }
+  table.map th, table.map td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+  table.map th { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+  table.sweep { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.sweep th, table.sweep td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+  table.sweep th { background: var(--blue-soft); color: var(--blue); }
+  table.sweep tr.clickable { cursor: pointer; }
+  table.sweep tr.clickable:hover td { background: var(--blue-soft); }
+  #metrics { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  details#refBox { margin-top: 12px; }
+  details#refBox > summary { cursor: pointer; color: var(--blue); font-size: 13px; }
+  #refBody { white-space: pre-wrap; word-break: break-word; margin-top: 8px; background: #fbfcfe;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;
+    font-family: "Consolas", "Courier New", monospace; font-size: 13px; max-height: 360px; overflow: auto; }
+  #refMeta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  /* 遮罩与提示 */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(244,246,249,.86);
+    display: none; align-items: center; justify-content: center; z-index: 30;
+  }
+  #overlay.show { display: flex; }
+  #overlay .box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px 28px; text-align: center; max-width: 460px;
+  }
+  #overlay .spin {
+    width: 26px; height: 26px; margin: 0 auto 12px; border-radius: 50%;
+    border: 3px solid var(--blue-soft); border-top-color: var(--blue);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #overlay .msg { color: var(--ink); }
+  #overlay .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  #toast {
+    position: fixed; right: 18px; bottom: 18px; z-index: 40;
+    display: none; max-width: 420px;
+    background: #fdf2f1; border: 1px solid #e4b4af; color: var(--err);
+    border-radius: var(--radius); padding: 10px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  }
+  #toast.show { display: block; }
+  #toast .close { float: right; margin-left: 10px; cursor: pointer; color: var(--muted); }
+
+  .disabled { pointer-events: none; opacity: .55; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <span class="brand">WIS 本地客户端</span>
+  <span class="stage-box">
+    <span class="meta">阶段</span>
+    <select id="stage" title="切换 SFT / DPO adapter（会重新加载模型）">
+      <option value="sft">SFT</option>
+      <option value="dpo">DPO</option>
+    </select>
+  </span>
+  <span class="meta">模型 <b id="mModel">—</b></span>
+  <span class="meta">设备 <b id="mDevice">—</b></span>
+  <span class="meta">显存 <b id="mVram">—</b></span>
+  <span class="meta">引导 <b id="mW">w=1.00（基准）</b></span>
+  <span class="spacer"></span>
+  <span class="status"><span class="dot" id="mDot"></span><span id="mStatus">连接中…</span></span>
+</header>
+
+<div id="layout">
+  <!-- 左栏 -->
+  <section id="left" class="disabled">
+    <div class="card">
+      <h2>输入</h2>
+      <label class="field">
+        <span class="lb">问题 <span class="req">*</span>（必填）</span>
+        <textarea id="question" rows="4" placeholder="用一句话描述要迁移的功能需求"></textarea>
+      </label>
+      <details class="opt">
+        <summary>可选字段：功能 / 行为 / 结构 / 约束</summary>
+        <label class="field"><span class="lb">功能</span><input type="text" id="function" placeholder="期望实现的功能"></label>
+        <label class="field"><span class="lb">行为</span><input type="text" id="behavior" placeholder="期望的行为方式"></label>
+        <label class="field"><span class="lb">结构</span><input type="text" id="structure" placeholder="相关的结构或组件"></label>
+        <label class="field"><span class="lb">约束（用 ; 分隔）</span><input type="text" id="constraints" placeholder="约束一; 约束二"></label>
+      </details>
+    </div>
+
+    <div class="card params">
+      <h2>参数</h2>
+      <div class="prow">
+        <div class="phead"><span>CFG 引导 w</span><span class="val" id="wVal">1.00</span></div>
+        <input type="range" id="w" min="0.4" max="1.5" step="0.05" value="1.0">
+        <div class="phead"><span class="note" id="wNote">=1 基准</span></div>
+      </div>
+      <div class="prow">
+        <div class="phead"><span>温度 temperature</span><span class="val" id="temperatureVal">0.70</span></div>
+        <input type="range" id="temperature" min="0.1" max="1.5" step="0.05" value="0.7">
+      </div>
+      <div class="prow">
+        <div class="phead"><span>top-p</span><span class="val" id="top_pVal">0.90</span></div>
+        <input type="range" id="top_p" min="0.1" max="1.0" step="0.05" value="0.9">
+      </div>
+      <div class="prow">
+        <div class="phead"><span>最大生成长度</span><span class="val">token</span></div>
+        <input type="number" id="max_new_tokens" min="16" max="2048" step="16" value="1600">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>操作</h2>
+      <div class="btnrow">
+        <button class="primary" id="btnGen">生成</button>
+        <button class="danger" id="btnStop" disabled>停止</button>
+        <button id="btnClear">清空</button>
+        <button id="btnSample">载入验证集样本</button>
+        <button id="btnSweep">跑 w 对比</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>历史记录</h2>
+      <ul id="history"><li class="empty" style="border:none;cursor:default;">本次会话暂无记录</li></ul>
+    </div>
+  </section>
+
+  <!-- 右栏 -->
+  <section id="right" class="disabled">
+    <div class="card">
+      <h2>流式原文</h2>
+      <pre id="raw" placeholder="生成结果将在此实时显示"></pre>
+      <div id="metrics"></div>
+    </div>
+    <div class="card">
+      <h2>结构化摘要</h2>
+      <div id="card"><span class="empty">尚未生成。</span></div>
+    </div>
+    <div class="card">
+      <h2>参考对照</h2>
+      <details id="refBox" style="display:none;">
+        <summary>参考输出（held-out 标注，仅供对照，非模型输出）</summary>
+        <pre id="refBody"></pre>
+        <div id="refMeta"></div>
+      </details>
+      <div id="refPlaceholder" class="empty">点击「载入验证集样本」后可在此对照标注答案。</div>
+    </div>
+  </section>
+</div>
+
+<div id="overlay"><div class="box">
+  <div class="spin"></div>
+  <div class="msg" id="overlayMsg">正在加载模型…</div>
+  <div class="sub" id="overlaySub">首次加载约需 60 秒，请勿关闭页面。</div>
+</div></div>
+
+<div id="toast"><span class="close" id="toastClose">关闭</span><span id="toastMsg"></span></div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var S = {
+    ready: false,
+    loading: true,
+    generating: false,
+    controller: null,
+    timer: null,
+    history: [],
+    ref: null,
+    lastRun: null,
+    sweepRuns: [],
+    syncedParams: false
+  };
+
+  // ------------------------------------------------------------ 提示
+  function showError(message) {
+    $("toastMsg").textContent = message || "发生未知错误。";
+    $("toast").classList.add("show");
+    clearTimeout(showError._t);
+    showError._t = setTimeout(hideToast, 8000);
+  }
+  function hideToast() { $("toast").classList.remove("show"); }
+  $("toastClose").addEventListener("click", hideToast);
+
+  function showOverlay(msg, sub) {
+    $("overlayMsg").textContent = msg || "正在加载模型…";
+    $("overlaySub").textContent = sub || "";
+    $("overlay").classList.add("show");
+  }
+  function updOverlay(msg) { $("overlayMsg").textContent = msg; }
+  function hideOverlay() { $("overlay").classList.remove("show"); }
+
+  // ------------------------------------------------------------ 状态
+  function setEnabled(on) {
+    $("left").classList.toggle("disabled", !on);
+    $("right").classList.toggle("disabled", !on);
+  }
+
+  function wText(w) {
+    var v = Number(w);
+    var label = v < 1 ? "发散" : (v > 1 ? "收敛" : "基准");
+    return "w=" + v.toFixed(2) + "（" + label + "）";
+  }
+
+  function applyState(st, forceParams) {
+    S.ready = !!st.ready;
+    S.loading = !!st.loading;
+    S.lastState = st;
+
+    if (st.stage) $("stage").value = st.stage;
+    $("mModel").textContent = st.model ? basename(st.model) : "—";
+    $("mModel").title = st.model || "";
+    $("mDevice").textContent = st.device || "—";
+    $("mVram").textContent = st.vram || "—";
+    $("mW").textContent = wText(st.w);
+
+    var dot = $("mDot");
+    if (st.error) {
+      dot.className = "dot err";
+      $("mStatus").textContent = "加载失败";
+    } else if (st.ready) {
+      dot.className = "dot ready";
+      $("mStatus").textContent = "就绪";
+    } else {
+      dot.className = "dot busy";
+      $("mStatus").textContent = "加载中…";
+    }
+
+    if (st.ready) {
+      setEnabled(true);
+      hideOverlay();
+    } else {
+      setEnabled(false);
+      if (st.error) {
+        showOverlay("模型加载失败", st.error);
+      } else {
+        showOverlay("正在加载模型…", "首次加载约需 60 秒，加载完成后界面自动就绪。");
+      }
+    }
+
+    if (st.ready && (!S.syncedParams || forceParams)) {
+      setSlider("w", st.w);
+      setSlider("temperature", st.temperature);
+      setSlider("top_p", st.top_p);
+      $("max_new_tokens").value = st.max_new_tokens;
+      S.syncedParams = true;
+    }
+  }
+
+  function basename(path) {
+    if (!path) return "—";
+    var parts = String(path).split(/[\\/]/);
+    return parts[parts.length - 1] || path;
+  }
+
+  function setSlider(id, value) {
+    var el = $(id);
+    el.value = value;
+    refreshSliderLabel(id);
+  }
+
+  function refreshSliderLabel(id) {
+    var el = $(id);
+    if (id === "w") {
+      $("wVal").textContent = Number(el.value).toFixed(2);
+      var v = Number(el.value);
+      $("wNote").textContent = v < 1 ? "<1 发散" : (v > 1 ? ">1 收敛" : "=1 基准");
+    } else {
+      $(id + "Val").textContent = Number(el.value).toFixed(2);
+    }
+  }
+
+  function fetchState() {
+    return fetch("/api/state", { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("状态接口返回 " + r.status);
+      return r.json();
+    });
+  }
+
+  function poll() {
+    fetchState().then(function (st) {
+      applyState(st, false);
+      if (!st.ready) schedulePoll(1500);
+    }).catch(function (err) {
+      $("mDot").className = "dot err";
+      $("mStatus").textContent = "连接失败";
+      showError("无法连接后端服务：" + err.message);
+      schedulePoll(3000);
+    });
+  }
+  function schedulePoll(delay) {
+    clearTimeout(S.timer);
+    S.timer = setTimeout(poll, delay);
+  }
+
+  // ------------------------------------------------------------ 参数
+  ["w", "temperature", "top_p"].forEach(function (id) {
+    var el = $(id);
+    el.addEventListener("input", function () { refreshSliderLabel(id); });
+    el.addEventListener("change", function () {
+      var obj = {}; obj[id] = Number(el.value);
+      postConfig(obj);
+    });
+  });
+  $("max_new_tokens").addEventListener("change", function () {
+    postConfig({ max_new_tokens: Number($("max_new_tokens").value) });
+  });
+  $("stage").addEventListener("change", function () {
+    var stage = $("stage").value;
+    showOverlay("正在切换阶段并重新加载模型…", "约需 60 秒，请勿关闭页面。");
+    postConfig({ stage: stage }, true);
+  });
+
+  function postConfig(obj, isStage) {
+    return fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(obj)
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) { showError(j.error || "参数更新失败"); return j; }
+        applyState(j, !!isStage);
+        if (!j.ready) schedulePoll(1000);
+        return j;
+      });
+    }).catch(function (err) {
+      showError("参数更新请求失败：" + err.message);
+    });
+  }
+
+  // ------------------------------------------------------------ problem 收集
+  function collectProblem() {
+    var raw = $("constraints").value;
+    var constraints = raw.split(/[;；]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    return {
+      question: $("question").value.trim(),
+      "function": $("function").value.trim(),
+      behavior: $("behavior").value.trim(),
+      structure: $("structure").value.trim(),
+      constraints: constraints
+    };
+  }
+
+  function currentParams() {
+    return {
+      w: Number($("w").value),
+      temperature: Number($("temperature").value),
+      top_p: Number($("top_p").value),
+      max_new_tokens: Number($("max_new_tokens").value)
+    };
+  }
+
+  // ------------------------------------------------------------ SSE 流
+  function isAbort(err) { return err && (err.name === "AbortError"); }
+
+  function parseFrame(frame) {
+    var event = "message";
+    var data = "";
+    frame.split("\n").forEach(function (line) {
+      if (line.indexOf("event:") === 0) event = line.slice(6).trim();
+      else if (line.indexOf("data:") === 0) data += line.slice(5).trim();
+    });
+    if (!data) return null;
+    try { return { event: event, data: JSON.parse(data) }; }
+    catch (e) { return null; }
+  }
+
+  function streamGenerate(problem, params, onDelta) {
+    var payload = {
+      problem: problem,
+      w: params.w,
+      temperature: params.temperature,
+      top_p: params.top_p,
+      max_new_tokens: params.max_new_tokens
+    };
+    var ctrl = new AbortController();
+    S.controller = ctrl;
+    return fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
+    }).then(function (resp) {
+      if (!resp.ok) {
+        return resp.json().then(function (j) {
+          return { error: j.error || ("请求失败（" + resp.status + "）") };
+        }).catch(function () {
+          return { error: "请求失败（" + resp.status + "）" };
+        });
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder("utf-8");
+      var buf = "";
+      var done = null;
+      var errored = null;
+
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) return null;
+          buf += decoder.decode(res.value, { stream: true });
+          var idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            var frame = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            var ev = parseFrame(frame);
+            if (!ev) continue;
+            if (ev.event === "delta" && onDelta) onDelta(ev.data.text);
+            else if (ev.event === "done") done = ev.data;
+            else if (ev.event === "error") errored = ev.data.message;
+          }
+          return pump();
+        });
+      }
+      return pump().then(function () {
+        if (errored) return { error: errored };
+        return { done: done };
+      });
+    }).catch(function (err) {
+      if (isAbort(err)) return { aborted: true };
+      return { error: "读取模型输出失败：" + err.message };
+    }).then(function (res) {
+      S.controller = null;
+      return res;
+    });
+  }
+
+  // ------------------------------------------------------------ 生成流程
+  function setGenUI(generating) {
+    S.generating = generating;
+    $("btnGen").disabled = generating;
+    $("btnSweep").disabled = generating;
+    $("btnSample").disabled = generating;
+    $("btnStop").disabled = !generating;
+  }
+
+  function runGenerate(problem, params, silent) {
+    var out = $("raw");
+    var start = Date.now();
+    var deltas = 0;
+    if (!silent) { out.textContent = ""; $("metrics").textContent = ""; }
+    var onDelta = silent ? null : function (text) {
+      deltas += 1;
+      out.textContent = text;
+      out.scrollTop = out.scrollHeight;
+      $("metrics").textContent = "生成中… 约 " + deltas + " token · " +
+        ((Date.now() - start) / 1000).toFixed(1) + "s";
+    };
+    return streamGenerate(problem, params, onDelta);
+  }
+
+  function onGenerate() {
+    if (!S.ready || S.generating) return;
+    var problem = collectProblem();
+    if (!problem.question) { showError("「问题」为必填项，请先填写。"); return; }
+    hideToast();
+    setGenUI(true);
+    var params = currentParams();
+    runGenerate(problem, params, false).then(function (res) {
+      setGenUI(false);
+      if (res.aborted) { $("metrics").textContent = "已停止"; return; }
+      if (res.error) { showError(res.error); return; }
+      finalize(problem, params, res.done);
+    });
+  }
+
+  function finalize(problem, params, done) {
+    if (!done) { showError("后端未返回结果。"); return; }
+    var out = $("raw");
+    out.textContent = done.text;
+    out.scrollTop = out.scrollHeight;
+    renderSummary(done.summary);
+    var tps = done.seconds > 0 ? done.tokens / done.seconds : 0;
+    $("metrics").textContent = "耗时 " + done.seconds.toFixed(1) + "s · " +
+      done.tokens + " token · " + tps.toFixed(1) + " tok/s";
+    S.lastRun = { problem: problem, params: params, done: done };
+    pushHistory(problem, params, done);
+  }
+
+  $("btnGen").addEventListener("click", onGenerate);
+  $("btnStop").addEventListener("click", function () {
+    if (S.controller) S.controller.abort();
+  });
+  $("btnClear").addEventListener("click", function () {
+    $("question").value = "";
+    $("function").value = "";
+    $("behavior").value = "";
+    $("structure").value = "";
+    $("constraints").value = "";
+    $("raw").textContent = "";
+    $("metrics").textContent = "";
+    $("card").innerHTML = '<span class="empty">尚未生成。</span>';
+    S.ref = null;
+    $("refBox").style.display = "none";
+    $("refPlaceholder").style.display = "block";
+    hideToast();
+  });
+
+  // ------------------------------------------------------------ 验证集样本
+  $("btnSample").addEventListener("click", function () {
+    fetch("/api/sample", { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("样本接口返回 " + r.status);
+      return r.json();
+    }).then(function (j) {
+      S.ref = j;
+      fillProblem(j.problem);
+      renderReference();
+    }).catch(function (err) {
+      showError("载入验证集样本失败：" + err.message);
+    });
+  });
+
+  function fillProblem(p) {
+    p = p || {};
+    $("question").value = p.question || "";
+    $("function").value = p["function"] || "";
+    $("behavior").value = p.behavior || "";
+    $("structure").value = p.structure || "";
+    var cons = p.constraints || [];
+    $("constraints").value = cons.join("; ");
+  }
+
+  function renderReference() {
+    if (!S.ref) return;
+    $("refPlaceholder").style.display = "none";
+    $("refBox").style.display = "block";
+    $("refBody").textContent = S.ref.reference || "";
+    $("refMeta").textContent = "样本 id=" + (S.ref.id || "?") + "（验证集共 " + S.ref.count + " 条）";
+  }
+
+  // ------------------------------------------------------------ 结构化摘要渲染
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  }
+
+  function kv(label, value) {
+    var wrap = el("div", "kv");
+    wrap.appendChild(el("div", "k", label));
+    wrap.appendChild(el("div", "v", (value === undefined || value === null || value === "") ? "（缺失）" : value));
+    return wrap;
+  }
+
+  function mappingTable(entries) {
+    var table = el("table", "map");
+    var thead = el("thead");
+    var hr = el("tr");
+    ["源", "目标", "关系", "条件"].forEach(function (h) { hr.appendChild(el("th", null, h)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = el("tbody");
+    if (!entries.length) {
+      var tr = el("tr");
+      var td = el("td", null, "（无映射条目）");
+      td.colSpan = 4;
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    } else {
+      entries.forEach(function (m) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, m.source));
+        tr.appendChild(el("td", null, m.target));
+        tr.appendChild(el("td", null, m.relation));
+        tr.appendChild(el("td", null, m.condition || "无"));
+        tbody.appendChild(tr);
+      });
+    }
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function renderSummary(summary) {
+    var card = $("card");
+    card.innerHTML = "";
+    if (!summary) {
+      card.appendChild(el("span", "empty", "结构化摘要：无法解析（请查看上方原文）。"));
+      return;
+    }
+    if (summary.status || summary.reason) {
+      card.appendChild(el("div", "kv", null));
+      card.appendChild(kv("状态", summary.status));
+      card.appendChild(kv("原因", summary.reason));
+      var qs = summary.questions || [];
+      card.appendChild(kv("追问", qs.length ? qs.map(function (q, i) { return (i + 1) + ". " + q; }).join("\n") : "（无）"));
+      return;
+    }
+    var mechanisms = summary.mechanisms || [];
+    card.appendChild(el("div", "k", "机制数：" + mechanisms.length + " 个"));
+    mechanisms.forEach(function (m, i) {
+      card.appendChild(el("div", "k", (i + 1) + ". [" + (m.source_domain || "?") + "] " + (m.mechanism || "?")));
+      card.appendChild(mappingTable(m.mapping || []));
+    });
+    card.appendChild(kv("解法", summary.solution));
+    var prereqs = summary.prerequisites || [];
+    card.appendChild(kv("关键前提", prereqs.length ? prereqs.map(function (p) { return "· " + p; }).join("\n") : "（无）"));
+    card.appendChild(kv("局限", summary.limitations));
+    card.appendChild(kv("验证计划", summary.validation_plan));
+  }
+
+  // ------------------------------------------------------------ w 对比
+  $("btnSweep").addEventListener("click", function () {
+    if (!S.ready || S.generating) return;
+    var problem = collectProblem();
+    if (!problem.question) { showError("「问题」为必填项，请先填写。"); return; }
+    var weights = [0.6, 0.8, 1.0, 1.2];
+    hideToast();
+    setGenUI(true);
+    showOverlay("正在跑 w 对比…", "依次以 w=0.6 / 0.8 / 1.0 / 1.2 生成，请稍候。");
+    S.sweepRuns = [];
+
+    var index = 0;
+    function next() {
+      if (index >= weights.length) {
+        setGenUI(false);
+        hideOverlay();
+        renderSweep();
+        return;
+      }
+      var w = weights[index];
+      updOverlay("正在生成 w=" + w.toFixed(2) + "（" + (index + 1) + "/" + weights.length + "）…");
+      var params = currentParams();
+      params.w = w;
+      runGenerate(problem, params, true).then(function (res) {
+        S.sweepRuns.push({ w: w, res: res });
+        if (res.aborted) { setGenUI(false); hideOverlay(); renderSweep(); return; }
+        index += 1;
+        next();
+      });
+    }
+    next();
+  });
+
+  function renderSweep() {
+    var runs = S.sweepRuns;
+    var card = $("card");
+    card.innerHTML = "";
+    card.appendChild(el("div", "k", "w 对比结果（对当前问题依次生成）"));
+    var table = el("table", "sweep");
+    var thead = el("thead");
+    var hr = el("tr");
+    ["w", "档位", "机制数", "机制", "映射条数", "耗时"].forEach(function (h) { hr.appendChild(el("th", null, h)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = el("tbody");
+    runs.forEach(function (run, i) {
+      var tr = el("tr", "clickable");
+      var res = run.res;
+      var count = "—", mech = "—", maps = "—", secs = "—";
+      if (res && res.done) {
+        var s = res.done.summary;
+        secs = res.done.seconds.toFixed(1) + "s";
+        if (s && (s.status || s.reason)) { count = "拒答"; mech = s.reason || ""; maps = "0"; }
+        else if (s) {
+          var ms = s.mechanisms || [];
+          count = ms.length;
+          mech = ms.map(function (m) { return m.mechanism || "?"; }).join(" / ");
+          maps = ms.reduce(function (acc, m) { return acc + (m.mapping || []).length; }, 0);
+        }
+      } else if (res && res.error) { count = "失败"; mech = res.error; }
+      else if (res && res.aborted) { count = "已停止"; }
+      tr.appendChild(el("td", null, run.w.toFixed(2)));
+      tr.appendChild(el("td", null, run.w < 1 ? "发散" : (run.w > 1 ? "收敛" : "基准")));
+      tr.appendChild(el("td", null, count));
+      tr.appendChild(el("td", null, String(mech).slice(0, 40)));
+      tr.appendChild(el("td", null, maps));
+      tr.appendChild(el("td", null, secs));
+      tr.addEventListener("click", function () { loadSweepRun(i); });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+    card.appendChild(el("div", "k", "点击任意一行可回看该档完整输出。"));
+    if (S.lastRun) renderHistorySelection(S.lastRun);
+  }
+
+  function loadSweepRun(i) {
+    var run = S.sweepRuns[i];
+    if (!run || !run.res || !run.res.done) return;
+    var done = run.res.done;
+    $("raw").textContent = done.text;
+    $("raw").scrollTop = $("raw").scrollHeight;
+    renderSummary(done.summary);
+    var tps = done.seconds > 0 ? done.tokens / done.seconds : 0;
+    $("metrics").textContent = "w=" + run.w.toFixed(2) + " · 耗时 " + done.seconds.toFixed(1) +
+      "s · " + done.tokens + " token · " + tps.toFixed(1) + " tok/s";
+  }
+
+  // ------------------------------------------------------------ 历史
+  function pushHistory(problem, params, done) {
+    var summary = done.summary || {};
+    var mechanisms = summary.mechanisms || [];
+    var domain = (summary.status || summary.reason) ? "拒答" :
+      (mechanisms.length ? (mechanisms.length + " 机制") : "无法解析");
+    var item = {
+      time: new Date(),
+      question: problem.question,
+      w: params.w,
+      domain: domain,
+      problem: problem,
+      params: params,
+      done: done
+    };
+    S.history.unshift(item);
+    renderHistory();
+  }
+
+  function renderHistory() {
+    var list = $("history");
+    list.innerHTML = "";
+    if (!S.history.length) {
+      var li0 = el("li", "empty", "本次会话暂无记录");
+      li0.style.border = "none";
+      li0.style.cursor = "default";
+      list.appendChild(li0);
+      return;
+    }
+    S.history.forEach(function (item, i) {
+      var li = el("li");
+      li.appendChild(el("div", "hq", String(item.question).slice(0, 60) || "（空问题）"));
+      li.appendChild(el("div", "ht", "w=" + item.w.toFixed(2) + " · " + item.domain + " · " + fmtTime(item.time)));
+      li.addEventListener("click", function () { loadHistory(i); });
+      list.appendChild(li);
+    });
+  }
+
+  function fmtTime(d) {
+    function pad(n) { return n < 10 ? "0" + n : "" + n; }
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function loadHistory(i) {
+    var item = S.history[i];
+    if (!item) return;
+    fillProblem(item.problem);
+    $("raw").textContent = item.done.text;
+    $("raw").scrollTop = $("raw").scrollHeight;
+    renderSummary(item.done.summary);
+    var tps = item.done.seconds > 0 ? item.done.tokens / item.done.seconds : 0;
+    $("metrics").textContent = "历史回看 · 耗时 " + item.done.seconds.toFixed(1) + "s · " +
+      item.done.tokens + " token · " + tps.toFixed(1) + " tok/s";
+  }
+
+  function renderHistorySelection() { /* 占位：无需额外处理 */ }
+
+  // ------------------------------------------------------------ 启动
+  ["w", "temperature", "top_p"].forEach(refreshSliderLabel);
+  poll();
+})();
+</script>
+</body>
+</html>
