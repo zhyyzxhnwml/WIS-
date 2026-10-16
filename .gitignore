@@ -14,15 +14,11 @@ train/wis/data/pipeline_real_smoke/
 train/wis/data/pipeline_real_v2/
 train/wis/data/pipeline_real_v3/
 train/wis/data/real/
-train/wis/data/real_v1/
 train/wis/data/real_v2/
 train/wis/data/candidates.jsonl
 train/wis/data/pairs.jsonl
 train/wis/data/problems.jsonl
 train/wis/outputs/
-
-# 工具产物
-.trae-html-share-packages/
 
 # Python
 __pycache__/
